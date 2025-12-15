@@ -17,7 +17,7 @@ static double l2_norm_diff(const std::vector<double>& a, const std::vector<doubl
     return std::sqrt(sum);
 }
 
-// Symulowane wyżarzanie (wersja sekwencyjna) zgodnie z podanym algorytmem.
+// Symulowane wyżarzanie (wersja sekwencyjna).
 // Uwaga: generowanie x* jest globalne (jednostajnie w [a,b]^n), bo tak jest w treści zadania.
 std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_function_t& calc_value,
                                                                     std::vector<double> starting_x_0,
@@ -31,9 +31,6 @@ std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_f
     const double alpha = 0.3;
     const double epsT = 0.1;
 
-    // Kryterium Cauchy'ego (opcjonalne).
-    // Dla Twojego losowania globalnego zwykle i tak się nie “zapali”.
-    // Jeśli chcesz włączyć: ustaw np. 1e-12.
     const double cauchy_eps = 0.0;
 
     std::random_device rd;
@@ -42,7 +39,6 @@ std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_f
 
     if (starting_x_0.size() != n)
     {
-        // prosto i proceduralnie; możesz też zrobić throw jeśli wolisz
         starting_x_0.resize(n, 0.0);
     }
 
@@ -78,7 +74,6 @@ std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_f
                 x0 = x_star;
                 f_x0 = f_star;
 
-                // globalnie najlepszy punkt
                 if (f_star < f_opt)
                 {
                     xopt = x_star;
@@ -101,7 +96,7 @@ std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_f
                 }
             }
 
-            // (opcjonalnie) kryterium Cauchy'ego
+            // kryterium Cauchy'ego
             if (cauchy_eps > 0.0 && accepted)
             {
                 if (step_norm < cauchy_eps)

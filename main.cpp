@@ -19,7 +19,7 @@ int main()
 
     auto end_q = std::chrono::high_resolution_clock::now();
     auto dur_q = std::chrono::duration_cast<std::chrono::milliseconds>( end_q - start_q ).count();
-    std::cout << "Sequential execution time for quadratic equation: " << dur_q << std::endl;
+    std::cout << "Sequential execution time for quadratic equation: " << dur_q << " Distance from minimum: " << std::abs( quadratic_result.second ) << std::endl;
 
     // Woods equation
     n = 100000;
@@ -31,7 +31,7 @@ int main()
     auto end_woods = std::chrono::high_resolution_clock::now();
     auto dur_woods = std::chrono::duration_cast<std::chrono::milliseconds>( end_woods - start_woods ).count();
 
-    std::cout << "Sequential execution time for woods equation: " << dur_woods << std::endl;
+    std::cout << "Sequential execution time for woods equation: " << dur_woods << " Distance from minimum: " << std::abs( woods_result.second ) << std::endl;
 
     // Powell Singular equation
     n = 100000;
@@ -44,7 +44,7 @@ int main()
     auto end_powell = std::chrono::high_resolution_clock::now();
     auto dur_powell = std::chrono::duration_cast<std::chrono::milliseconds>( end_powell - start_powell ).count();
 
-    std::cout << "Sequential execution time for powell equation: " << dur_powell << std::endl;
+    std::cout << "Sequential execution time for powell equation: " << dur_powell << " Distance from minimum: " << std::abs( powell_singular_result.second ) << std::endl;
 
     return 0;
 }
