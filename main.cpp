@@ -11,7 +11,7 @@ int main()
 {
 
     // Quadratic equation
-    uint32_t n = 200000;
+    uint32_t n = 800000;
     std::vector<double> x_0 = make_quadratic_x0(n);
     auto start_q = std::chrono::high_resolution_clock::now();
 
@@ -19,10 +19,10 @@ int main()
 
     auto end_q = std::chrono::high_resolution_clock::now();
     auto dur_q = std::chrono::duration_cast<std::chrono::milliseconds>( end_q - start_q ).count();
-    std::cout << "Sequential execution time for quadratic equation: " << dur_q << " Distance from minimum: " << std::abs( quadratic_result.second ) << std::endl;
+    std::cout << "Sequential execution time for quadratic equation: " << dur_q << "ms Euclidean norm of result: " << l2_norm( quadratic_result.first) << std::endl;
 
     // Woods equation
-    n = 100000;
+    n = 800000;
     x_0 = make_woods_x0(n);
     auto start_woods = std::chrono::high_resolution_clock::now();
 
@@ -31,10 +31,10 @@ int main()
     auto end_woods = std::chrono::high_resolution_clock::now();
     auto dur_woods = std::chrono::duration_cast<std::chrono::milliseconds>( end_woods - start_woods ).count();
 
-    std::cout << "Sequential execution time for woods equation: " << dur_woods << " Distance from minimum: " << std::abs( woods_result.second ) << std::endl;
+    std::cout << "Sequential execution time for woods equation: " << dur_woods << "ms Euclidean norm of result: " << l2_norm_distance_to_woods_min( woods_result.first, n) << std::endl;
 
     // Powell Singular equation
-    n = 100000;
+    n = 800000;
     x_0 = make_powell_x0(n);
 
     auto start_powell = std::chrono::high_resolution_clock::now();
@@ -44,7 +44,7 @@ int main()
     auto end_powell = std::chrono::high_resolution_clock::now();
     auto dur_powell = std::chrono::duration_cast<std::chrono::milliseconds>( end_powell - start_powell ).count();
 
-    std::cout << "Sequential execution time for powell equation: " << dur_powell << " Distance from minimum: " << std::abs( powell_singular_result.second ) << std::endl;
+    std::cout << "Sequential execution time for powell equation: " << dur_powell << "ms Euclidean norm of minimum result: " << l2_norm_distance_to_powell_min( powell_singular_result.first, n ) << std::endl;
 
     return 0;
 }

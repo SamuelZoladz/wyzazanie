@@ -3,6 +3,7 @@
 #include <cmath>
 #include <random>
 #include <vector>
+#include <algorithm>
 
 // Norma euklidesowa różnicy dwóch wektorów (kryterium Cauchy'ego)
 static double l2_norm_diff(const std::vector<double>& a, const std::vector<double>& b)
@@ -69,7 +70,10 @@ std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_f
             if (f_star < f_x0)
             {
                 accepted = true;
-                if (cauchy_eps > 0.0) step_norm = l2_norm_diff(x0, x_star);
+                if (cauchy_eps > 0.0) 
+                {
+                    step_norm = l2_norm_diff(x0, x_star);
+                }
 
                 x0 = x_star;
                 f_x0 = f_star;
@@ -84,12 +88,14 @@ std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_f
             {
                 // Krok 4
                 const double r = U(gen);
-                const double p = std::exp((f_x0 - f_star) / T);
 
-                if (r < p)
+                if (r < std::exp((f_x0 - f_star) / T))
                 {
                     accepted = true;
-                    if (cauchy_eps > 0.0) step_norm = l2_norm_diff(x0, x_star);
+                    if (cauchy_eps > 0.0) 
+                    {
+                        step_norm = l2_norm_diff(x0, x_star);
+                    }
 
                     x0 = x_star;
                     f_x0 = f_star;
