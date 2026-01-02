@@ -7,8 +7,8 @@
 #include <random>
 #include <vector>
 
-
 int main(int argc, char *argv[]) {
+
   // Inicjalizacja MPI
   MPI_Init(&argc, &argv);
 
@@ -18,15 +18,13 @@ int main(int argc, char *argv[]) {
 
   const uint32_t n = 800000;
 
-  // =========================================================================
-  // Test 1: Równanie kwadratowe
-  // =========================================================================
+  // Równanie kwadratowe
   if (rank == 0) {
     std::cout << "=== Testing Quadratic Function ===" << std::endl;
     std::cout << "n = " << n << ", processes = " << size << std::endl;
   }
 
-  // Wersja sekwencyjna (tylko na procesie 0)
+  // RK wersja sekwencyjna - realizacja tylko w procesie z rank 0
   if (rank == 0) {
     std::vector<double> x_0 = make_quadratic_x0(n);
     auto start_q = std::chrono::high_resolution_clock::now();
@@ -45,7 +43,7 @@ int main(int argc, char *argv[]) {
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-  // Wersja równoległa
+  // RK wersja równoległa - realizacja w wszystkich procesach
   {
     std::vector<double> x_0 = make_quadratic_x0(n);
 
@@ -68,14 +66,12 @@ int main(int argc, char *argv[]) {
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-  // =========================================================================
-  // Test 2: Równanie Woodsa
-  // =========================================================================
+  // Równanie Woodsa
   if (rank == 0) {
     std::cout << "\n=== Testing Woods Function ===" << std::endl;
   }
 
-  // Wersja sekwencyjna (tylko na procesie 0)
+  // RW wersja sekwencyjna - realizacja tylko w procesie z rank 0
   if (rank == 0) {
     std::vector<double> x_0 = make_woods_x0(n);
     auto start_w = std::chrono::high_resolution_clock::now();
@@ -95,7 +91,7 @@ int main(int argc, char *argv[]) {
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-  // Wersja równoległa
+  // RW wersja równoległa - realizacja w wszystkich procesach
   {
     std::vector<double> x_0 = make_woods_x0(n);
 
@@ -119,14 +115,12 @@ int main(int argc, char *argv[]) {
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-  // =========================================================================
-  // Test 3: Równanie Powella (osobliwe)
-  // =========================================================================
+  // Równanie Powella (osobliwe)
   if (rank == 0) {
     std::cout << "\n=== Testing Powell Singular Function ===" << std::endl;
   }
 
-  // Wersja sekwencyjna (tylko na procesie 0)
+  // RP wersja sekwencyjna - realizacja tylko w procesie z rank 0
   if (rank == 0) {
     std::vector<double> x_0 = make_powell_x0(n);
     auto start_p = std::chrono::high_resolution_clock::now();
@@ -146,7 +140,7 @@ int main(int argc, char *argv[]) {
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-  // Wersja równoległa
+  // RP wersja równoległa - realizacja w wszystkich procesach
   {
     std::vector<double> x_0 = make_powell_x0(n);
 
@@ -169,7 +163,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // Finalizacja MPI
+  // Zakończenie środowiska MPI
   MPI_Finalize();
   return 0;
 }

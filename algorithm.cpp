@@ -1,12 +1,10 @@
 #include "algorithm.h"
-
 #include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <mpi.h>
 #include <random>
 #include <vector>
-
 
 // Norma euklidesowa różnicy dwóch wektorów (kryterium Cauchy'ego)
 static double l2_norm_diff(const std::vector<double> &a,
@@ -96,7 +94,7 @@ perform_sequential_algorithm(const calc_function_t &calc_value,
         }
       }
 
-      // kryterium Cauchy'ego
+      // Kryterium Cauchy'ego
       if (cauchy_eps > 0.0 && accepted) {
         if (step_norm < cauchy_eps) {
           cauchy_steps++;
@@ -119,10 +117,13 @@ perform_sequential_algorithm(const calc_function_t &calc_value,
   return {xopt, f_opt};
 }
 
-// ============================================================================
-// Wersja równoległa (MPI) z dekompozycją danych
-// ============================================================================
-
+// Symulowane wyżarzanie (wersja równoległa).
+// Przyjęta implementacja, podobnie jak wersja sekwencyjna sprawdza jednego
+// kandydata naraz. Pierwotnie losowano x* globalnie i przesyłano do każdego
+// procesu - było to bardzo kosztowne. Teraz każdy proces losuje swój fragment
+// x*. Funkcje testujące opierają się na sumowaniu wartości częściowych
+// wartości. Stąd każdy proces może obliczyć sumę swojej części wektora x* i
+// zwrócić ją do procesu głównego. Proces główny następnie ocenia kandydata.
 std::pair<std::vector<double>, double>
 perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
                            std::vector<double> starting_x_0, const uint32_t n,
@@ -132,7 +133,7 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-  // Parametry algorytmu (identyczne jak w wersji sekwencyjnej)
+  // Parametry algorytmu (takie same jak w wersji sekwencyjnej)
   const uint32_t L = 30;
   double T = 500.0;
   const double alpha = 0.3;
@@ -142,19 +143,20 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
   const uint16_t cauchy_max_steps = 10;
   uint16_t cauchy_steps = 0;
 
-  // Podział danych z wyrównaniem do bloków (dla Woods/Powell block_alignment=4)
+  // Podział danych z wyrównaniem do bloków (funkcje Woodsa i Powella obliczane
+  // są w blokach o rozmiarze 4)
   const uint32_t total_blocks = n / block_alignment;
   const uint32_t blocks_per_proc = total_blocks / static_cast<uint32_t>(size);
   const uint32_t remainder_blocks = total_blocks % static_cast<uint32_t>(size);
 
-  // Każdy proces otrzymuje blocks_per_proc bloków,
-  // pierwsze remainder_blocks procesów dostaje po 1 dodatkowym bloku
+  // Każdy proces otrzymuje blocks_per_proc bloków, a pierwsze remainder_blocks
+  // procesów dostaje po 1 dodatkowym bloku.
   uint32_t local_blocks =
       blocks_per_proc +
       (static_cast<uint32_t>(rank) < remainder_blocks ? 1 : 0);
   uint32_t local_n = local_blocks * block_alignment;
 
-  // Oblicz globalny indeks startowy dla tego procesu
+  // Obliczenie indeksu startowego dla procesu
   uint32_t global_start = 0;
   for (int r = 0; r < rank; ++r) {
     uint32_t r_blocks =
@@ -162,12 +164,13 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
     global_start += r_blocks * block_alignment;
   }
 
-  // Niezależny generator dla każdego procesu (seed + rank)
+  // Przygotowanie generatorów dla każdego procesu (wspólny seed przesunięty o
+  // rank procesu)
   const uint64_t base_seed = 42;
   std::mt19937 gen(base_seed + static_cast<uint64_t>(rank));
   std::uniform_real_distribution<double> U(0.0, 1.0);
 
-  // Generator tylko dla procesu 0 (do decyzji akceptacji)
+  // Przygotowanie generatora dla procesu 0 na potrzeby akceptacji
   std::mt19937 decision_gen(base_seed + 1000);
   std::uniform_real_distribution<double> U_decision(0.0, 1.0);
 
@@ -175,7 +178,7 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
   std::vector<double> local_x0(local_n);
   std::vector<double> local_xopt(local_n);
 
-  // Inicjalizacja z punktu startowego (każdy proces bierze swój fragment)
+  // Inicjalizacja z punktu startowego - innego dla każdego procesu
   if (starting_x_0.size() >= global_start + local_n) {
     for (uint32_t i = 0; i < local_n; ++i) {
       local_x0[i] = starting_x_0[global_start + i];
@@ -185,7 +188,7 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
   }
   local_xopt = local_x0;
 
-  // Oblicz początkowy koszt lokalny i zsumuj globalnie
+  // Obliczenie początkowego kosztu lokalnego i zsumowanie globalnie
   double local_cost = calc_value_partial(local_x0, local_n, global_start);
   double f_x0 = 0.0;
   MPI_Allreduce(&local_cost, &f_x0, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
@@ -194,7 +197,7 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
 
   while (T > epsT) {
     for (uint32_t k = 0; k < L; ++k) {
-      // Każdy proces generuje SWOJĄ część kandydata x*
+      // Obliczenie przez każdy proces swojej części x*
       std::vector<double> local_x_star(local_n);
       for (uint32_t i = 0; i < local_n; ++i) {
         const double s_i = U(gen);
@@ -203,14 +206,14 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
             s_i * (static_cast<double>(b) - static_cast<double>(a));
       }
 
-      // Oblicz lokalny koszt i zsumuj globalnie
+      // Obliczenie lokalnego kosztu i zsumowanie globalnie
       double local_f_star =
           calc_value_partial(local_x_star, local_n, global_start);
       double f_star = 0.0;
       MPI_Allreduce(&local_f_star, &f_star, 1, MPI_DOUBLE, MPI_SUM,
                     MPI_COMM_WORLD);
 
-      // Oblicz lokalną normę różnicy dla kryterium Cauchy'ego
+      // Obliczenie lokalnej normy różnicy dla kryterium Cauchy'ego
       double local_norm_sq = 0.0;
       for (uint32_t i = 0; i < local_n; ++i) {
         double d = local_x0[i] - local_x_star[i];
@@ -221,7 +224,8 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
                     MPI_COMM_WORLD);
       double step_norm = std::sqrt(global_norm_sq);
 
-      // Proces 0 decyduje o akceptacji
+      // Proces 0 decyduje o akceptacji i przekazuje decyzję do wszystkich
+      // procesów
       int accepted = 0;
       if (rank == 0) {
         if (f_star < f_x0) {
@@ -233,11 +237,9 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
           }
         }
       }
-
-      // Broadcast decyzji do wszystkich procesów
       MPI_Bcast(&accepted, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-      // Aktualizacja lokalnych danych jeśli zaakceptowano
+      // Aktualizacja lokalnych danych jeśli zaakceptowano kandydata
       if (accepted) {
         local_x0 = local_x_star;
         f_x0 = f_star;
@@ -267,8 +269,6 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
         }
       }
     }
-
-    // Krok 6: schładzanie
     T *= (1.0 - alpha);
   }
 
@@ -278,12 +278,12 @@ finalize:
   std::vector<int> recvcounts(size);
   std::vector<int> displs(size);
 
-  // Zbierz rozmiary lokalne na wszystkich procesach
+  // Zebranie rozmiarów lokalnych na wszystkich procesach
   int local_n_int = static_cast<int>(local_n);
   MPI_Allgather(&local_n_int, 1, MPI_INT, recvcounts.data(), 1, MPI_INT,
                 MPI_COMM_WORLD);
 
-  // Oblicz przesunięcia
+  // Obliczenie przesunięć
   displs[0] = 0;
   for (int r = 1; r < size; ++r) {
     displs[r] = displs[r - 1] + recvcounts[r - 1];

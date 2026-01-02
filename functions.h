@@ -5,10 +5,6 @@
 #include <cstdint>
 #include <vector>
 
-// ============================================================================
-// Wersje sekwencyjne (pełny wektor)
-// ============================================================================
-
 double calc_quadratic_function(const std::vector<double> &x, uint32_t n);
 std::vector<double> make_quadratic_x0(uint32_t n);
 double l2_norm(const std::vector<double> &x);
@@ -20,10 +16,6 @@ double l2_norm_distance_to_woods_min(const std::vector<double> &x, uint32_t n);
 double calc_powell_singular_function(const std::vector<double> &x, uint32_t n);
 std::vector<double> make_powell_x0(uint32_t n);
 double l2_norm_distance_to_powell_min(const std::vector<double> &x, uint32_t n);
-
-// ============================================================================
-// Wersje równoległe (lokalna część wektora)
-// ============================================================================
 
 double calc_quadratic_function_partial(const std::vector<double> &local_x,
                                        uint32_t local_n, uint32_t global_start);
