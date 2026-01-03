@@ -36,12 +36,12 @@ struct SharedState {
 std::pair<std::vector<double>, double>
 perform_sequential_algorithm(const calc_function_t &calc_value,
                              std::vector<double> starting_x_0, uint32_t n,
-                             int a, int b, bool debug);
+                             int a, int b, uint64_t base_seed, bool debug);
 
 std::pair<std::vector<double>, double> perform_parallel_algorithm_win(
     const calc_function_partial_t &calc_value_partial,
     std::vector<double> starting_x_0, uint32_t n, int a, int b,
-    uint32_t block_alignment, bool debug, int rank, int size,
-    SharedState *shared_state, double *full_x_ptr);
+    uint32_t block_alignment, uint64_t base_seed, bool debug, int rank,
+    int size, SharedState *shared_state, double *full_x_ptr);
 
 #endif // ALGORITHM_H

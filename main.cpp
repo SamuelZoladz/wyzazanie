@@ -16,10 +16,10 @@ const char *SHM_NAME = "Local\\SA_SharedMemory";
 // aplikacji poprzez wielokrotne uruchamianie pliku .exe za pomocą funkcji
 // CreateProcess. Każda z instancji wie jakie jest jej zadanie poprzez
 // przekazaną do niej wartość rank i size.
-void spawn_processes(int size, const std::string &exe_path) {
+void spawn_processes(int size, uint64_t seed, const std::string &exe_path) {
   for (int i = 1; i < size; ++i) {
     std::string cmd = exe_path + " --rank " + std::to_string(i) + " --size " +
-                      std::to_string(size);
+                      std::to_string(size) + " --seed " + std::to_string(seed);
     // Parametry do funkcji CreateProcess wymagane w środowisku Windows
     STARTUPINFOA si = {sizeof(si)};
     PROCESS_INFORMATION pi;
@@ -41,6 +41,8 @@ void spawn_processes(int size, const std::string &exe_path) {
 int main(int argc, char *argv[]) {
   int rank = 0;
   int size = 4;
+  uint64_t base_seed = 0;
+  bool seed_provided = false;
 
   // Parsowanie argumentów
   for (int i = 1; i < argc; ++i) {
@@ -49,6 +51,16 @@ int main(int argc, char *argv[]) {
       rank = std::stoi(argv[++i]);
     if (arg == "--size" && i + 1 < argc)
       size = std::stoi(argv[++i]);
+    if (arg == "--seed" && i + 1 < argc) {
+      base_seed = std::stoull(argv[++i]);
+      seed_provided = true;
+    }
+  }
+
+  // Jeśli rank 0 i nie podano ziarna, wygeneruj losowe
+  if (rank == 0 && !seed_provided) {
+    std::random_device rd;
+    base_seed = rd();
   }
 
   const uint32_t n = 800000;
@@ -92,7 +104,7 @@ int main(int argc, char *argv[]) {
     memset(shared_state, 0, sizeof(SharedState));
 
     // Tworzenie pozostałych procesów
-    spawn_processes(size, argv[0]);
+    spawn_processes(size, base_seed, argv[0]);
   }
 
   // Równanie kwadratowe
@@ -107,7 +119,7 @@ int main(int argc, char *argv[]) {
     std::vector<double> x_0 = make_quadratic_x0(n);
     auto start_q = std::chrono::high_resolution_clock::now();
     auto res = perform_sequential_algorithm(calc_quadratic_function, x_0, n, -5,
-                                            5, debug);
+                                            5, base_seed, debug);
     auto end_q = std::chrono::high_resolution_clock::now();
     dur_q_quadratic =
         std::chrono::duration_cast<std::chrono::milliseconds>(end_q - start_q)
@@ -123,8 +135,8 @@ int main(int argc, char *argv[]) {
     auto start_p = std::chrono::high_resolution_clock::now();
 
     auto parallel_result = perform_parallel_algorithm_win(
-        calc_quadratic_function_partial, x_0, n, -5, 5, 1, debug, rank, size,
-        shared_state, full_x_ptr);
+        calc_quadratic_function_partial, x_0, n, -5, 5, 1, base_seed, debug,
+        rank, size, shared_state, full_x_ptr);
 
     auto end_p = std::chrono::high_resolution_clock::now();
     dur_p_quadratic =
@@ -152,8 +164,8 @@ int main(int argc, char *argv[]) {
   if (rank == 0) {
     std::vector<double> x_0 = make_woods_x0(n);
     auto start_w = std::chrono::high_resolution_clock::now();
-    auto res =
-        perform_sequential_algorithm(calc_woods_function, x_0, n, -5, 5, debug);
+    auto res = perform_sequential_algorithm(calc_woods_function, x_0, n, -5, 5,
+                                            base_seed, debug);
     auto end_w = std::chrono::high_resolution_clock::now();
     dur_q_woods =
         std::chrono::duration_cast<std::chrono::milliseconds>(end_w - start_w)
@@ -169,8 +181,8 @@ int main(int argc, char *argv[]) {
     std::vector<double> x_0 = make_woods_x0(n);
     auto start_p = std::chrono::high_resolution_clock::now();
     auto parallel_result = perform_parallel_algorithm_win(
-        calc_woods_function_partial, x_0, n, -5, 5, 4, debug, rank, size,
-        shared_state, full_x_ptr);
+        calc_woods_function_partial, x_0, n, -5, 5, 4, base_seed, debug, rank,
+        size, shared_state, full_x_ptr);
     auto end_p = std::chrono::high_resolution_clock::now();
     dur_p_woods =
         std::chrono::duration_cast<std::chrono::milliseconds>(end_p - start_p)
@@ -199,7 +211,7 @@ int main(int argc, char *argv[]) {
     std::vector<double> x_0 = make_powell_x0(n);
     auto start_p = std::chrono::high_resolution_clock::now();
     auto res = perform_sequential_algorithm(calc_powell_singular_function, x_0,
-                                            n, -4, 4, debug);
+                                            n, -4, 4, base_seed, debug);
     auto end_p = std::chrono::high_resolution_clock::now();
     dur_q_powell =
         std::chrono::duration_cast<std::chrono::milliseconds>(end_p - start_p)
@@ -215,8 +227,8 @@ int main(int argc, char *argv[]) {
     std::vector<double> x_0 = make_powell_x0(n);
     auto start_p = std::chrono::high_resolution_clock::now();
     auto parallel_result = perform_parallel_algorithm_win(
-        calc_powell_singular_function_partial, x_0, n, -4, 4, 4, debug, rank,
-        size, shared_state, full_x_ptr);
+        calc_powell_singular_function_partial, x_0, n, -4, 4, 4, base_seed,
+        debug, rank, size, shared_state, full_x_ptr);
     auto end_p = std::chrono::high_resolution_clock::now();
     dur_p_powell =
         std::chrono::duration_cast<std::chrono::milliseconds>(end_p - start_p)

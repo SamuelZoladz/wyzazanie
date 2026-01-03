@@ -59,7 +59,8 @@ static void win_bcast_int(SharedState *state, int *val, int root, int size) {
 std::pair<std::vector<double>, double>
 perform_sequential_algorithm(const calc_function_t &calc_value,
                              std::vector<double> starting_x_0, const uint32_t n,
-                             const int a, const int b, const bool debug) {
+                             const int a, const int b, uint64_t base_seed,
+                             const bool debug) {
   // Krok 1: parametry (wg propozycji z treści)
   const uint32_t L = 30;
   double T = 500.0;
@@ -70,8 +71,7 @@ perform_sequential_algorithm(const calc_function_t &calc_value,
   const uint16_t cauchy_max_steps = 10;
   uint16_t cauchy_steps = 0;
 
-  std::random_device rd;
-  std::mt19937 gen(rd());
+  std::mt19937 gen(base_seed);
   std::uniform_real_distribution<double> U(0.0, 1.0);
 
   if (starting_x_0.size() != n) {
@@ -158,8 +158,8 @@ perform_sequential_algorithm(const calc_function_t &calc_value,
 std::pair<std::vector<double>, double> perform_parallel_algorithm_win(
     const calc_function_partial_t &calc_value_partial,
     std::vector<double> starting_x_0, uint32_t n, int a, int b,
-    uint32_t block_alignment, bool debug, int rank, int size,
-    SharedState *shared_state, double *full_x_ptr) {
+    uint32_t block_alignment, uint64_t base_seed, bool debug, int rank,
+    int size, SharedState *shared_state, double *full_x_ptr) {
   // Parametry algorytmu (takie same jak w wersji sekwencyjnej)
   const uint32_t L = 30;
   double T = 500.0;
@@ -193,7 +193,6 @@ std::pair<std::vector<double>, double> perform_parallel_algorithm_win(
 
   // Przygotowanie generatorów dla każdego procesu (wspólny seed przesunięty o
   // rank procesu)
-  const uint64_t base_seed = 42;
   std::mt19937 gen(base_seed + static_cast<uint64_t>(rank));
   std::uniform_real_distribution<double> U(0.0, 1.0);
 
