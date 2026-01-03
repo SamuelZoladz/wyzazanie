@@ -2,9 +2,9 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include <mpi.h>
 #include <random>
 #include <vector>
+#include <windows.h>
 
 // Norma euklidesowa różnicy dwóch wektorów (kryterium Cauchy'ego)
 static double l2_norm_diff(const std::vector<double> &a,
@@ -16,6 +16,41 @@ static double l2_norm_diff(const std::vector<double> &a,
     sum += d * d;
   }
   return std::sqrt(sum);
+}
+
+// Bariera synchronizacyjna
+static void win_barrier(SharedState *state, int size) {
+  long gen = state->barrier_generation;
+  if (InterlockedIncrement(&state->barrier_count) == size) {
+    state->barrier_count = 0;
+    InterlockedIncrement(&state->barrier_generation);
+  } else {
+    while (state->barrier_generation == gen) {
+      YieldProcessor();
+    }
+  }
+}
+
+// Zebranie wyników cząstkowych, sumowanie i rozesłanie wyniku do wszystkich
+// procesów
+static void win_allreduce_sum(SharedState *state, double local_val,
+                              double *global_result, int rank, int size) {
+  state->local_contributions[rank] = local_val;
+  win_barrier(state, size);
+
+  double sum = 0.0;
+  for (int i = 0; i < size; ++i) {
+    sum += state->local_contributions[i];
+  }
+  *global_result = sum;
+  win_barrier(state, size);
+}
+
+// Przekazanie decyzji o akceptacji kandydata
+static void win_bcast_int(SharedState *state, int *val, int root, int size) {
+  win_barrier(state, size);
+  *val = state->accepted;
+  win_barrier(state, size);
 }
 
 // Symulowane wyżarzanie (wersja sekwencyjna).
@@ -31,8 +66,7 @@ perform_sequential_algorithm(const calc_function_t &calc_value,
   const double alpha = 0.3;
   const double epsT = 0.1;
 
-  const double cauchy_eps =
-      (b - a) * std::sqrt(n / 6.0) * 1e-3; // 1000 razy mniejsz niż krok
+  const double cauchy_eps = (b - a) * std::sqrt(n / 6.0) * 1e-3;
   const uint16_t cauchy_max_steps = 10;
   uint16_t cauchy_steps = 0;
 
@@ -55,26 +89,21 @@ perform_sequential_algorithm(const calc_function_t &calc_value,
       // Krok 2: losowanie x*
       std::vector<double> x_star(n);
       for (uint32_t i = 0; i < n; ++i) {
-        const double s_i = U(gen);
         x_star[i] = static_cast<double>(a) +
-                    s_i * (static_cast<double>(b) - static_cast<double>(a));
+                    U(gen) * (static_cast<double>(b) - static_cast<double>(a));
       }
 
       const double f_star = calc_value(x_star, n);
-
       bool accepted = false;
       double step_norm = 0.0;
 
       // Krok 3
       if (f_star < f_x0) {
         accepted = true;
-        if (cauchy_eps > 0.0) {
+        if (cauchy_eps > 0.0)
           step_norm = l2_norm_diff(x0, x_star);
-        }
-
         x0 = x_star;
         f_x0 = f_star;
-
         if (f_star < f_opt) {
           xopt = x_star;
           f_opt = f_star;
@@ -85,10 +114,8 @@ perform_sequential_algorithm(const calc_function_t &calc_value,
 
         if (r < std::exp((f_x0 - f_star) / T)) {
           accepted = true;
-          if (cauchy_eps > 0.0) {
+          if (cauchy_eps > 0.0)
             step_norm = l2_norm_diff(x0, x_star);
-          }
-
           x0 = x_star;
           f_x0 = f_star;
         }
@@ -102,11 +129,10 @@ perform_sequential_algorithm(const calc_function_t &calc_value,
 
       // Kryterium Cauchy'ego
       if (cauchy_eps > 0.0 && accepted) {
-        if (step_norm < cauchy_eps) {
+        if (step_norm < cauchy_eps)
           cauchy_steps++;
-        } else {
+        else
           cauchy_steps = 0;
-        }
         if (cauchy_steps > cauchy_max_steps) {
           std::cout << std::endl
                     << "Quitting algorithm due to Cauchy criterion"
@@ -119,7 +145,6 @@ perform_sequential_algorithm(const calc_function_t &calc_value,
     // Krok 6
     T *= (1.0 - alpha);
   }
-
   return {xopt, f_opt};
 }
 
@@ -130,15 +155,11 @@ perform_sequential_algorithm(const calc_function_t &calc_value,
 // x*. Funkcje testujące opierają się na sumowaniu wartości częściowych
 // wartości. Stąd każdy proces może obliczyć sumę swojej części wektora x* i
 // zwrócić ją do procesu głównego. Proces główny następnie ocenia kandydata.
-std::pair<std::vector<double>, double>
-perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
-                           std::vector<double> starting_x_0, const uint32_t n,
-                           const int a, const int b,
-                           const uint32_t block_alignment, const bool debug) {
-  int rank, size;
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &size);
-
+std::pair<std::vector<double>, double> perform_parallel_algorithm_win(
+    const calc_function_partial_t &calc_value_partial,
+    std::vector<double> starting_x_0, uint32_t n, int a, int b,
+    uint32_t block_alignment, bool debug, int rank, int size,
+    SharedState *shared_state, double *full_x_ptr) {
   // Parametry algorytmu (takie same jak w wersji sekwencyjnej)
   const uint32_t L = 30;
   double T = 500.0;
@@ -186,9 +207,8 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
 
   // Inicjalizacja z punktu startowego - innego dla każdego procesu
   if (starting_x_0.size() >= global_start + local_n) {
-    for (uint32_t i = 0; i < local_n; ++i) {
+    for (uint32_t i = 0; i < local_n; ++i)
       local_x0[i] = starting_x_0[global_start + i];
-    }
   } else {
     std::fill(local_x0.begin(), local_x0.end(), 0.0);
   }
@@ -197,7 +217,7 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
   // Obliczenie początkowego kosztu lokalnego i zsumowanie globalnie
   double local_cost = calc_value_partial(local_x0, local_n, global_start);
   double f_x0 = 0.0;
-  MPI_Allreduce(&local_cost, &f_x0, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  win_allreduce_sum(shared_state, local_cost, &f_x0, rank, size);
 
   double f_opt = f_x0;
 
@@ -206,18 +226,16 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
       // Obliczenie przez każdy proces swojej części x*
       std::vector<double> local_x_star(local_n);
       for (uint32_t i = 0; i < local_n; ++i) {
-        const double s_i = U(gen);
         local_x_star[i] =
             static_cast<double>(a) +
-            s_i * (static_cast<double>(b) - static_cast<double>(a));
+            U(gen) * (static_cast<double>(b) - static_cast<double>(a));
       }
 
       // Obliczenie lokalnego kosztu i zsumowanie globalnie
       double local_f_star =
           calc_value_partial(local_x_star, local_n, global_start);
       double f_star = 0.0;
-      MPI_Allreduce(&local_f_star, &f_star, 1, MPI_DOUBLE, MPI_SUM,
-                    MPI_COMM_WORLD);
+      win_allreduce_sum(shared_state, local_f_star, &f_star, rank, size);
 
       // Obliczenie lokalnej normy różnicy dla kryterium Cauchy'ego
       double local_norm_sq = 0.0;
@@ -226,24 +244,22 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
         local_norm_sq += d * d;
       }
       double global_norm_sq = 0.0;
-      MPI_Allreduce(&local_norm_sq, &global_norm_sq, 1, MPI_DOUBLE, MPI_SUM,
-                    MPI_COMM_WORLD);
+      win_allreduce_sum(shared_state, local_norm_sq, &global_norm_sq, rank,
+                        size);
       double step_norm = std::sqrt(global_norm_sq);
 
       // Proces 0 decyduje o akceptacji i przekazuje decyzję do wszystkich
       // procesów
       int accepted = 0;
       if (rank == 0) {
-        if (f_star < f_x0) {
+        if (f_star < f_x0)
           accepted = 1;
-        } else {
-          const double r = U_decision(decision_gen);
-          if (r < std::exp((f_x0 - f_star) / T)) {
-            accepted = 1;
-          }
-        }
+        else if (U_decision(decision_gen) < std::exp((f_x0 - f_star) / T))
+          accepted = 1;
+        shared_state->accepted = accepted;
       }
-      MPI_Bcast(&accepted, 1, MPI_INT, 0, MPI_COMM_WORLD);
+      win_barrier(shared_state, size);
+      accepted = shared_state->accepted;
 
       if (debug && rank == 0) {
         std::cout << "Iteration " << T << ", k=" << k << ": Candidate "
@@ -255,7 +271,6 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
       if (accepted) {
         local_x0 = local_x_star;
         f_x0 = f_star;
-
         if (f_star < f_opt) {
           local_xopt = local_x_star;
           f_opt = f_star;
@@ -263,50 +278,36 @@ perform_parallel_algorithm(const calc_function_partial_t &calc_value_partial,
 
         // Kryterium Cauchy'ego
         if (cauchy_eps > 0.0) {
-          if (step_norm < cauchy_eps) {
+          if (step_norm < cauchy_eps)
             cauchy_steps++;
-          } else {
+          else
             cauchy_steps = 0;
-          }
-
           if (cauchy_steps > cauchy_max_steps) {
-            if (rank == 0) {
+            if (rank == 0)
               std::cout
                   << std::endl
                   << "Quitting algorithm due to Cauchy criterion (parallel)"
                   << std::endl;
-            }
             goto finalize;
           }
         }
       }
     }
     T *= (1.0 - alpha);
+    if (shared_state->exit_flag)
+      break;
   }
 
 finalize:
-  // Złożenie pełnego wektora xopt na procesie 0 za pomocą MPI_Gatherv
-  std::vector<double> full_xopt;
-  std::vector<int> recvcounts(size);
-  std::vector<int> displs(size);
-
-  // Zebranie rozmiarów lokalnych na wszystkich procesach
-  int local_n_int = static_cast<int>(local_n);
-  MPI_Allgather(&local_n_int, 1, MPI_INT, recvcounts.data(), 1, MPI_INT,
-                MPI_COMM_WORLD);
-
-  // Obliczenie przesunięć
-  displs[0] = 0;
-  for (int r = 1; r < size; ++r) {
-    displs[r] = displs[r - 1] + recvcounts[r - 1];
+  // Kopia lokalnych wyników do pamięci współdzielonej
+  for (uint32_t i = 0; i < local_n; ++i) {
+    full_x_ptr[global_start + i] = local_xopt[i];
   }
+  win_barrier(shared_state, size);
 
+  std::vector<double> full_xopt_vec;
   if (rank == 0) {
-    full_xopt.resize(n);
+    full_xopt_vec.assign(full_x_ptr, full_x_ptr + n);
   }
-
-  MPI_Gatherv(local_xopt.data(), local_n_int, MPI_DOUBLE, full_xopt.data(),
-              recvcounts.data(), displs.data(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-  return {full_xopt, f_opt};
+  return {full_xopt_vec, f_opt};
 }
