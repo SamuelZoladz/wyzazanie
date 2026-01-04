@@ -1,66 +1,63 @@
+#include <chrono>
+#include <iostream>
+#include <omp.h>
+#include <vector>
 #include "algorithm.h"
 #include "functions.h"
-#include <chrono>
-#include <cmath>
-#include <iostream>
-#include <random>
-#include <vector>
 
+
+using clock_type = std::chrono::high_resolution_clock;
+
+void run_test(const std::string &name, const calc_function_t &func,
+              std::vector<double> (*make_x0)(uint32_t),
+              double (*norm_func)(const std::vector<double> &, uint32_t),
+              uint32_t n, int a, int b) {
+    std::cout << "\n===== " << name << " =====\n";
+
+    //SEQUENTIAL
+    omp_set_num_threads(1);
+    auto x0 = make_x0(n);
+
+    auto t1_start = clock_type::now();
+    auto result_seq = perform_sequential_algorithm(func, x0, n, a, b);
+    auto t1_end = clock_type::now();
+
+    double T1 = std::chrono::duration<double>(t1_end - t1_start).count();
+    std::cout << "SEQ time: " << T1 << " s"
+              << ", norm = " << norm_func(result_seq.first, n) << "\n";
+
+    //PARALLEL
+    for (int threads : {2, 4}) {
+        omp_set_num_threads(threads);
+
+        x0 = make_x0(n);
+        auto tp_start = clock_type::now();
+        auto result_par =
+            perform_parallel_algorithm_threads(func, x0, n, a, b, threads);
+        auto tp_end = clock_type::now();
+
+        double Tp = std::chrono::duration<double>(tp_end - tp_start).count();
+        double speedup = T1 / Tp;
+
+        std::cout << "Threads: " << threads << " | time: " << Tp << " s"
+                  << " | speedup S(n,p) = " << speedup << "\n";
+    }
+}
 
 int main() {
+    
+    const uint32_t n = 800000;
 
-  // Równanie kwadratowe
-  uint32_t n = 800000;
-  std::vector<double> x_0 = make_quadratic_x0(n);
-  auto start_q = std::chrono::high_resolution_clock::now();
+    run_test(
+        "QUADRATIC FUNCTION", calc_quadratic_function, make_quadratic_x0,
+        [](const std::vector<double> &x, uint32_t) { return l2_norm(x); }, n, -5,
+        5);
 
-  auto quadratic_result =
-      perform_sequential_algorithm(calc_quadratic_function, x_0, n, -5, 5);
+    run_test("WOODS FUNCTION", calc_woods_function, make_woods_x0,
+             l2_norm_distance_to_woods_min, n, -5, 5);
 
-  auto end_q = std::chrono::high_resolution_clock::now();
-  auto dur_q =
-      std::chrono::duration_cast<std::chrono::milliseconds>(end_q - start_q)
-          .count();
-  std::cout << "Sequential execution time for quadratic equation: " << dur_q
-            << "ms Euclidean norm of result: "
-            << l2_norm(quadratic_result.first) << std::endl;
+    run_test("POWELL SINGULAR FUNCTION", calc_powell_singular_function,
+             make_powell_x0, l2_norm_distance_to_powell_min, n, -4, 4);
 
-  // Równanie Woodsa
-  n = 800000;
-  x_0 = make_woods_x0(n);
-  auto start_woods = std::chrono::high_resolution_clock::now();
-
-  auto woods_result =
-      perform_sequential_algorithm(calc_woods_function, x_0, n, -5, 5);
-
-  auto end_woods = std::chrono::high_resolution_clock::now();
-  auto dur_woods = std::chrono::duration_cast<std::chrono::milliseconds>(
-                       end_woods - start_woods)
-                       .count();
-
-  std::cout << "Sequential execution time for woods equation: " << dur_woods
-            << "ms Euclidean norm of result: "
-            << l2_norm_distance_to_woods_min(woods_result.first, n)
-            << std::endl;
-
-  // Równanie Powella (osobliwe)
-  n = 800000;
-  x_0 = make_powell_x0(n);
-
-  auto start_powell = std::chrono::high_resolution_clock::now();
-
-  auto powell_singular_result = perform_sequential_algorithm(
-      calc_powell_singular_function, x_0, n, -4, 4);
-
-  auto end_powell = std::chrono::high_resolution_clock::now();
-  auto dur_powell = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        end_powell - start_powell)
-                        .count();
-
-  std::cout << "Sequential execution time for powell equation: " << dur_powell
-            << "ms Euclidean norm of minimum result: "
-            << l2_norm_distance_to_powell_min(powell_singular_result.first, n)
-            << std::endl;
-
-  return 0;
+    return 0;
 }
