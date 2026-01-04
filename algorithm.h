@@ -16,4 +16,13 @@ std::pair<std::vector<double>, double> perform_sequential_algorithm(
     const int b
 );
 
+std::pair<std::vector<double>, double> perform_parallel_algorithm_threads(
+    const calc_function_t& calc_value,
+    const std::vector<double>& starting_x_0,
+    uint32_t n,
+    int a,
+    int b,
+    int num_threads
+);
+
 #endif // SIMULATED_ANNEALING_H
