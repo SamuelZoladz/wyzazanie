@@ -1,5 +1,6 @@
 #include "functions.h"
 
+// Funkcje testowe dla algorytmu sekwencyjnego
 double calc_quadratic_function(const std::vector<double> &x, const uint32_t n) {
   double res = 0;
   for (uint32_t i = 2; i < n; ++i) {
@@ -13,7 +14,6 @@ std::vector<double> make_quadratic_x0(uint32_t n) {
   return std::vector<double>(n, 3.0);
 }
 
-// Funkcja używana do obliczenia poprawności funkcji kwadratowej
 double l2_norm(const std::vector<double> &x) {
   double sum = 0.0;
   for (double xi : x) {
@@ -126,4 +126,88 @@ double l2_norm_distance_to_powell_min(const std::vector<double> &x,
     sum += dx * dx + dy * dy + dz * dz + dw * dw;
   }
   return std::sqrt(sum);
+}
+
+// Funkcje testowe dla algorytmu równoległego
+// Muszą one uwzględniać podział wektora na części
+double calc_quadratic_function_partial(const std::vector<double> &local_x,
+                                       uint32_t local_n,
+                                       uint32_t global_start) {
+  // Każdy element funkcji kwadratowej zależy od elementu i, i-1 oraz i-2.
+  // Jest to utrudnienie w procesie podziału wektora na części. Z tego powodu
+  // przyjęto uproszczenie. Jeśli spojrzymy na wzór globalnie to prawie każdy
+  // element zostanie ostatecznie uwzględniony z wagą 201. Wyjątkiem będą
+  // elementy x[0] (waga 1) i x[1] (waga 100) i analogiczne na drugim końcu
+  // wektora. W uproszczonym podejściu każdy element wektora jest uwzględniany
+  // z wagą 201, co zdecydowanie upraszcza podział wektora na części, kosztem
+  // błędu dla kilku dużej liczby składników.
+
+  double res = 0.0;
+  for (uint32_t i = 0; i < local_n; ++i) {
+    res += 201.0 * local_x[i] * local_x[i];
+  }
+  return res;
+}
+
+double calc_woods_function_partial(const std::vector<double> &local_x,
+                                   uint32_t local_n, uint32_t global_start) {
+  // Funkcja Woodsa jest podzielna na bloki 4-elementowe
+  // Każdy blok jest niezależny, więc sumujemy bloki lokalne
+  double res = 0.0;
+  const uint32_t local_blocks = local_n / 4;
+
+  for (uint32_t i = 0; i < local_blocks; ++i) {
+    const uint32_t idx1 = 4 * i;
+    const uint32_t idx2 = idx1 + 1;
+    const uint32_t idx3 = idx1 + 2;
+    const uint32_t idx4 = idx1 + 3;
+
+    const double x1 = local_x[idx1];
+    const double x2 = local_x[idx2];
+    const double x3 = local_x[idx3];
+    const double x4 = local_x[idx4];
+
+    const double t1 = x2 - x1 * x1;
+    const double t2 = 1.0 - x1;
+    const double t3 = x4 - x3 * x3;
+    const double t4 = 1.0 - x3;
+    const double t5 = x2 + x4 - 2.0;
+    const double t6 = x2 - x4;
+
+    res += 100.0 * t1 * t1 + t2 * t2 + 90.0 * t3 * t3 + t4 * t4 +
+           10.0 * t5 * t5 + 0.1 * t6 * t6;
+  }
+  return res;
+}
+
+double calc_powell_singular_function_partial(const std::vector<double> &local_x,
+                                             uint32_t local_n,
+                                             uint32_t global_start) {
+  // Funkcja Powella jest podzielna na bloki 4-elementowe
+  // Każdy blok jest niezależny, więc sumujemy bloki lokalne
+  double res = 0.0;
+  const uint32_t local_blocks = local_n / 4;
+
+  for (uint32_t i = 0; i < local_blocks; ++i) {
+    const uint32_t idx1 = 4 * i;
+    const uint32_t idx2 = idx1 + 1;
+    const uint32_t idx3 = idx1 + 2;
+    const uint32_t idx4 = idx1 + 3;
+
+    const double x1 = local_x[idx1];
+    const double x2 = local_x[idx2];
+    const double x3 = local_x[idx3];
+    const double x4 = local_x[idx4];
+
+    const double t1 = x1 + 10.0 * x2;
+    const double t2 = x3 - x4;
+    const double t3 = x2 - 2.0 * x3;
+    const double t4 = x1 - x4;
+
+    const double t3_2 = t3 * t3;
+    const double t4_2 = t4 * t4;
+
+    res += t1 * t1 + 5.0 * t2 * t2 + t3_2 * t3_2 + 10.0 * t4_2 * t4_2;
+  }
+  return res;
 }
