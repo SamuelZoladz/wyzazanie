@@ -33,7 +33,7 @@ std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_f
     const double alpha = 0.3;
     const double epsT = 0.1;
 
-    const double cauchy_eps = (b - a) * std::sqrt(n / 6.0) * 1e-3; // 1000 times smaller than the expected step size
+    const double cauchy_eps = (b - a) * std::sqrt(n / 6.0) * 1e-3; // 1000 razy mniejsz niż krok
     const uint16_t cauchy_max_steps = 10;
     uint16_t cauchy_steps = 0;
 
@@ -129,3 +129,4 @@ std::pair<std::vector<double>, double> perform_sequential_algorithm(const calc_f
 
     return {xopt, f_opt};
 }
+
