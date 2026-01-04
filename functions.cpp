@@ -1,9 +1,8 @@
 #include "functions.h"
 #include <omp.h>
 
-// =======================================================
+
 // QUADRATIC FUNCTION
-// =======================================================
 
 double calc_quadratic_function(const std::vector<double>& x, const uint32_t n)
 {
@@ -35,9 +34,7 @@ double l2_norm(const std::vector<double>& x)
     return std::sqrt(sum);
 }
 
-// =======================================================
 // WOODS FUNCTION
-// =======================================================
 
 double calc_woods_function(const std::vector<double>& x, const uint32_t n)
 {
@@ -105,9 +102,7 @@ double l2_norm_distance_to_woods_min(const std::vector<double>& x, uint32_t n)
     return std::sqrt(sum);
 }
 
-// =======================================================
 // POWELL SINGULAR FUNCTION
-// =======================================================
 
 double calc_powell_singular_function(const std::vector<double>& x, uint32_t n)
 {
